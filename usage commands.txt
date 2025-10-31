@@ -1,0 +1,25 @@
+# Start University Portal (Port 3000)
+cd university-portal
+npm start 
+
+
+
+# Start Verifier Portal (Port 3001)
+cd ../verifier-portal  
+npm start
+
+
+cd ../student-wallet
+npx expo start
+
+chmod +x start-all.sh
+./start-all.sh
+
+
+echo "✅ All services started!"
+echo ""
+echo "🏛️  University Portal: http://localhost:3000"
+echo "✅ Verifier Portal: http://localhost:3001"
+echo "📱 Student Wallet: Check terminal for Expo QR code"
+echo ""
+echo "Press Ctrl+C to stop all services"

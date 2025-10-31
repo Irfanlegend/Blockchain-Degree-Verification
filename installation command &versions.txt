@@ -1,0 +1,123 @@
+# Project Setup and Dependencies
+
+This document outlines the packages, their versions, and the commands required to set up, build, and run the `trustchain-platform` project.
+
+## Global Dependencies
+
+It's recommended to have Node.js and npm installed.
+
+## Project Structure
+
+The project consists of several sub-projects, each with its own `package.json`:
+
+- `verifier-portal` (React application)
+- `student-wallet` (Expo/React Native application)
+- `blockchain` (Hardhat project for smart contracts)
+- `university-portal` (React application)
+
+---
+
+## 1. `verifier-portal`
+
+### Dependencies:
+- @testing-library/dom: ^10.4.1
+- @testing-library/jest-dom: ^6.9.1
+- @testing-library/react: ^16.3.0
+- @testing-library/user-event: ^13.5.0
+- ethers: ^5.7.2
+- html5-qrcode: ^2.3.8
+- react: ^19.2.0
+- react-dom: ^19.2.0
+- react-scripts: 5.0.1
+- web-vitals: ^2.1.4
+
+### Dev Dependencies:
+- cross-env: ^10.1.0
+
+### Installation, Build, and Run Commands:
+```bash
+cd verifier-portal
+npm install
+npm run build
+npm start
+```
+
+---
+
+## 2. `student-wallet`
+
+### Dependencies:
+- ethers: ^5.7.2
+- expo: ~54.0.20
+- expo-camera: ^17.0.8
+- expo-status-bar: ~3.0.8
+- react: 19.1.0
+- react-dom: 19.1.0
+- react-native: 0.81.5
+- react-native-qrcode-svg: ^6.3.15
+- react-native-web: ^0.21.0
+
+### Installation, Build, and Run Commands:
+```bash
+cd student-wallet
+npm install
+npm start
+# For Android:
+npm run android
+# For iOS:
+npm run ios
+# For Web:
+npm run web
+```
+
+---
+
+## 3. `blockchain`
+
+### Dependencies:
+- ethers: ^5.8.0
+
+### Dev Dependencies:
+- @nomiclabs/hardhat-ethers: ^2.2.3
+- @nomiclabs/hardhat-waffle: ^2.0.6
+- chai: ^4.5.0
+- dotenv: ^17.2.3
+- ethereum-waffle: ^3.4.4
+- hardhat: ^2.26.3
+
+### Installation, Build, and Run Commands:
+```bash
+cd blockchain
+npm install
+# Note: There is no explicit build command in package.json, typically you would compile contracts with Hardhat.
+# Example: npx hardhat compile
+# Run tests:
+npm test
+```
+
+---
+
+## 4. `university-portal`
+
+### Dependencies:
+- @testing-library/dom: ^10.4.1
+- @testing-library/jest-dom: ^6.9.1
+- @testing-library/react: ^16.3.0
+- @testing-library/user-event: ^13.5.0
+- ethers: ^5.7.2
+- papaparse: ^5.5.3
+- react: ^19.2.0
+- react-dom: ^19.2.0
+- react-scripts: 5.0.1
+- recharts: ^3.3.0
+- web-vitals: ^2.1.4
+
+### Installation, Build, and Run Commands:
+```bash
+cd university-portal
+npm install
+npm run build
+npm start
+```
+
+---

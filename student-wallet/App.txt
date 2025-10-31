@@ -1,0 +1,589 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  StyleSheet, 
+  Text, 
+  View, 
+  ScrollView, 
+  TouchableOpacity, 
+  Modal,
+  Alert,
+  ActivityIndicator,
+  Linking
+} from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
+import { ethers } from 'ethers';
+import { CONTRACT_ADDRESS, CONTRACT_ABI, POLYGON_AMOY_RPC, AMOY_CHAIN_ID } from './src/config';
+
+export default function App() {
+  const [account, setAccount] = useState('');
+  const [credentials, setCredentials] = useState([]);
+  const [selectedCredential, setSelectedCredential] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+
+  // Initialize provider
+  const provider = new ethers.providers.JsonRpcProvider(POLYGON_AMOY_RPC);
+  const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
+
+  // Connect MetaMask (for mobile web browser)
+  const connectMetaMask = async () => {
+    try {
+      setIsConnecting(true);
+
+      // Check if MetaMask is available
+      if (typeof window === 'undefined' || !window.ethereum) {
+        Alert.alert(
+          'MetaMask Not Found',
+          'Please open this app in MetaMask browser or install MetaMask extension',
+          [
+            {
+              text: 'Open in MetaMask',
+              onPress: () => {
+                const url = window.location.href;
+                Linking.openURL(`https://metamask.app.link/dapp/${url.replace('https://', '')}`);
+              }
+            },
+            { text: 'Cancel' }
+          ]
+        );
+        return;
+      }
+
+      // Check and switch to Amoy network
+      const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+      
+      if (parseInt(chainId, 16) !== AMOY_CHAIN_ID) {
+        try {
+          await window.ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: '0x13882' }], // 80002 in hex
+          });
+        } catch (switchError) {
+          if (switchError.code === 4902) {
+            await window.ethereum.request({
+              method: 'wallet_addEthereumChain',
+              params: [{
+                chainId: '0x13882',
+                chainName: 'Polygon Amoy Testnet',
+                nativeCurrency: {
+                  name: 'MATIC',
+                  symbol: 'MATIC',
+                  decimals: 18,
+                },
+                rpcUrls: ['https://rpc-amoy.polygon.technology'],
+                blockExplorerUrls: ['https://amoy.polygonscan.com/'],
+              }],
+            });
+          } else {
+            throw switchError;
+          }
+        }
+      }
+
+      // Request account access
+      const accounts = await window.ethereum.request({
+        method: 'eth_requestAccounts'
+      });
+
+      setAccount(accounts[0]);
+      Alert.alert('✅ Connected!', `Address: ${accounts[0].slice(0, 6)}...${accounts[0].slice(-4)}`);
+      
+      // Auto-load credentials
+      loadMyCredentials(accounts[0]);
+
+    } catch (error) {
+      console.error('Connection error:', error);
+      Alert.alert('Connection Error', error.message);
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  // Load credentials for connected wallet
+  const loadMyCredentials = async (address) => {
+    try {
+      setLoading(true);
+      const hashes = await contract.getHolderCredentials(address);
+      
+      if (hashes.length === 0) {
+        Alert.alert('No Credentials', 'No credentials found for your wallet address. Ask your university to issue credentials to this address.');
+        setCredentials([]);
+        return;
+      }
+
+      const credList = [];
+      for (let hash of hashes) {
+        const details = await contract.verifyCredential(hash);
+        credList.push({
+          hash: hash,
+          exists: details[0],
+          isValid: details[1],
+          issuer: details[2],
+          holder: details[3],
+          credentialType: details[4],
+          issuedDate: new Date(details[5].toNumber() * 1000).toLocaleDateString(),
+          issuerName: details[6]
+        });
+      }
+      
+      setCredentials(credList);
+      Alert.alert('✅ Loaded!', `Found ${credList.length} credentials`);
+    } catch (error) {
+      console.error('Error loading credentials:', error);
+      Alert.alert('Error', 'Failed to load credentials: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Listen for account changes
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.ethereum) {
+      window.ethereum.on('accountsChanged', (accounts) => {
+        if (accounts.length === 0) {
+          setAccount('');
+          setCredentials([]);
+        } else {
+          setAccount(accounts[0]);
+          loadMyCredentials(accounts[0]);
+        }
+      });
+
+      window.ethereum.on('chainChanged', () => {
+        window.location.reload();
+      });
+    }
+  }, []);
+
+  return (
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.title}>🎓 My Credentials Wallet</Text>
+        <Text style={styles.subtitle}>Blockchain-Verified Degrees</Text>
+      </View>
+
+      <ScrollView style={styles.content}>
+        
+        {/* MetaMask Connection */}
+        {!account ? (
+          <View style={styles.connectCard}>
+            <Text style={styles.connectTitle}>Connect Your Wallet</Text>
+            <Text style={styles.connectInfo}>
+              Connect MetaMask to view your credentials issued by universities
+            </Text>
+            
+            <TouchableOpacity 
+              style={styles.connectButton}
+              onPress={connectMetaMask}
+              disabled={isConnecting}
+            >
+              {isConnecting ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <Text style={styles.buttonText}>
+                  🦊 Connect MetaMask
+                </Text>
+              )}
+            </TouchableOpacity>
+
+            <Text style={styles.helpText}>
+              💡 Your wallet address will be used to receive credentials from universities
+            </Text>
+          </View>
+        ) : (
+          <>
+            {/* Connected Account */}
+            <View style={styles.accountCard}>
+              <Text style={styles.accountLabel}>✅ Connected Wallet</Text>
+              <Text style={styles.accountAddress}>
+                {account.slice(0, 6)}...{account.slice(-4)}
+              </Text>
+              <TouchableOpacity 
+                style={styles.refreshButton}
+                onPress={() => loadMyCredentials(account)}
+                disabled={loading}
+              >
+                <Text style={styles.refreshButtonText}>
+                  {loading ? '⏳ Loading...' : '🔄 Refresh Credentials'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Credentials List */}
+            <Text style={styles.sectionTitle}>
+              My Credentials ({credentials.length})
+            </Text>
+
+            {loading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#667eea" />
+                <Text style={styles.loadingText}>Loading credentials...</Text>
+              </View>
+            ) : credentials.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyText}>No credentials yet</Text>
+                <Text style={styles.emptySubtext}>
+                  Share your wallet address with your university:{'\n\n'}
+                  <Text style={styles.addressText}>{account}</Text>
+                </Text>
+              </View>
+            ) : (
+              credentials.map((cred, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={[
+                    styles.credentialCard,
+                    !cred.isValid && styles.revokedCard
+                  ]}
+                  onPress={() => setSelectedCredential(cred)}
+                >
+                  <View style={styles.credentialHeader}>
+                    <Text style={styles.credentialType}>
+                      {cred.credentialType}
+                    </Text>
+                    {cred.isValid ? (
+                      <View style={styles.badge}>
+                        <Text style={styles.badgeText}>✅ Valid</Text>
+                      </View>
+                    ) : (
+                      <View style={[styles.badge, styles.revokedBadge]}>
+                        <Text style={styles.badgeText}>❌ Revoked</Text>
+                      </View>
+                    )}
+                  </View>
+                  
+                  <Text style={styles.credentialInfo}>🏛️ {cred.issuerName}</Text>
+                  <Text style={styles.credentialInfo}>📅 Issued: {cred.issuedDate}</Text>
+                  
+                  <TouchableOpacity 
+                    style={styles.shareButton}
+                    onPress={() => setSelectedCredential(cred)}
+                  >
+                    <Text style={styles.shareButtonText}>📱 Share via QR Code</Text>
+                  </TouchableOpacity>
+                </TouchableOpacity>
+              ))
+            )}
+          </>
+        )}
+      </ScrollView>
+
+      {/* QR Code Modal */}
+      <Modal
+        visible={selectedCredential !== null}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setSelectedCredential(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Scan to Verify</Text>
+            
+            {selectedCredential && (
+              <>
+                <Text style={styles.modalSubtitle}>
+                  {selectedCredential.credentialType}
+                </Text>
+                <Text style={styles.modalInfo}>
+                  {selectedCredential.issuerName}
+                </Text>
+                
+                <View style={styles.qrContainer}>
+                  <QRCode
+                    value={JSON.stringify({
+                      hash: selectedCredential.hash,
+                      credentialType: selectedCredential.credentialType,
+                      issuerName: selectedCredential.issuerName,
+                      issuedDate: selectedCredential.issuedDate,
+                      isValid: selectedCredential.isValid,
+                      holder: selectedCredential.holder
+                    })}
+                    size={250}
+                    backgroundColor="white"
+                    color="black"
+                  />
+                </View>
+
+                <Text style={styles.hashText}>
+                  Hash: {selectedCredential.hash.slice(0, 10)}...{selectedCredential.hash.slice(-8)}
+                </Text>
+
+                <TouchableOpacity
+                  style={[styles.connectButton, styles.closeButton]}
+                  onPress={() => setSelectedCredential(null)}
+                >
+                  <Text style={styles.buttonText}>Close</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Footer */}
+      <View style={styles.footer}>
+        <Text style={styles.footerText}>
+          Contract: {CONTRACT_ADDRESS.slice(0, 6)}...{CONTRACT_ADDRESS.slice(-4)}
+        </Text>
+        <Text style={styles.footerText}>
+          Polygon Amoy Testnet
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f7fafc',
+  },
+  header: {
+    backgroundColor: '#667eea',
+    padding: 20,
+    paddingTop: 50,
+    alignItems: 'center',
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: 'white',
+    marginBottom: 5,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.9)',
+  },
+  content: {
+    flex: 1,
+    padding: 15,
+  },
+  connectCard: {
+    backgroundColor: 'white',
+    borderRadius: 15,
+    padding: 30,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  connectTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#2d3748',
+    marginBottom: 10,
+  },
+  connectInfo: {
+    fontSize: 16,
+    color: '#718096',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  connectButton: {
+    backgroundColor: '#667eea',
+    padding: 18,
+    borderRadius: 12,
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  helpText: {
+    fontSize: 14,
+    color: '#a0aec0',
+    textAlign: 'center',
+    marginTop: 10,
+  },
+  accountCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  accountLabel: {
+    fontSize: 14,
+    color: '#718096',
+    marginBottom: 5,
+  },
+  accountAddress: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#2d3748',
+    marginBottom: 15,
+  },
+  refreshButton: {
+    backgroundColor: '#48bb78',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  refreshButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    color: '#2d3748',
+  },
+  loadingContainer: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 15,
+    fontSize: 16,
+    color: '#718096',
+  },
+  emptyState: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 40,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#a0aec0',
+    marginBottom: 10,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#cbd5e0',
+    textAlign: 'center',
+  },
+  addressText: {
+    fontFamily: 'monospace',
+    fontSize: 12,
+    color: '#4299e1',
+  },
+  credentialCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 15,
+    borderLeftWidth: 5,
+    borderLeftColor: '#667eea',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  revokedCard: {
+    borderLeftColor: '#f56565',
+    opacity: 0.7,
+  },
+  credentialHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  credentialType: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#2d3748',
+    flex: 1,
+  },
+  badge: {
+    backgroundColor: '#48bb78',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  revokedBadge: {
+    backgroundColor: '#f56565',
+  },
+  badgeText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  credentialInfo: {
+    fontSize: 14,
+    color: '#718096',
+    marginBottom: 5,
+  },
+  shareButton: {
+    backgroundColor: '#4299e1',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  shareButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 30,
+    alignItems: 'center',
+    width: '90%',
+    maxWidth: 400,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 5,
+    color: '#2d3748',
+  },
+  modalSubtitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#4a5568',
+    marginBottom: 5,
+  },
+  modalInfo: {
+    fontSize: 14,
+    color: '#718096',
+    marginBottom: 20,
+  },
+  qrContainer: {
+    padding: 20,
+    backgroundColor: 'white',
+    borderRadius: 12,
+    marginBottom: 15,
+  },
+  hashText: {
+    fontSize: 12,
+    color: '#a0aec0',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  closeButton: {
+    backgroundColor: '#f56565',
+  },
+  footer: {
+    padding: 15,
+    backgroundColor: '#edf2f7',
+    alignItems: 'center',
+  },
+  footerText: {
+    fontSize: 12,
+    color: '#718096',
+  },
+});
