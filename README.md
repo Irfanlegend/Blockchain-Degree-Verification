@@ -1,5 +1,8 @@
 # TrustChain Platform: Decentralized Credential Verification
 
+<img width="252" height="252" alt="image" src="https://github.com/user-attachments/assets/dd19f38a-268b-40f6-b212-af452b2d6476" />
+
+
 TrustChain is a decentralized platform built on the Polygon Amoy Testnet for issuing, holding, and verifying educational credentials. It leverages blockchain technology to ensure the authenticity, integrity, and immutability of academic records, eliminating the need for traditional, often cumbersome, verification processes.
 
 ## Core Components and Roles
